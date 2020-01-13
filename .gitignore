@@ -1,0 +1,4 @@
+# Cache from tests
+.pytest_cache
+# VSCode configuration
+.vscode
