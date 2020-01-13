@@ -1,4 +1,5 @@
 import socket
+import select
 import sys
 import errno
 import os
@@ -39,6 +40,8 @@ try:
 except ConnectionRefusedError:
     print('Connection refused (Check IP and Port)')
     sys.exit()
+else:
+    print('Connected to remote host.')
 # Receive functionality will not be blocking
 client_socket.setblocking(False)
 
@@ -47,40 +50,52 @@ uname = USERNAME.encode('utf-8')
 uname_header = f'{len(uname):<{HEADER_LENGTH}}'.encode('utf-8')
 client_socket.send(uname_header + uname)
 
+# sys.stdout.write('\n[Me]: ')
+# sys.stdout.flush()
+print('\n[Me]: ', end='')
+
 while True:
-    message = input(f'[{USERNAME}]: ')
+    # message = input(f'[{USERNAME}]: ')
+    socket_list = [sys.stdin, client_socket]
+    read_sockets, write_sockets, error_sockets = select.select(
+        socket_list, [], [])
 
-    # Check if message is not empty
-    if message:
-        # Send message
-        message = message.encode('utf-8')
-        message_header = f'{len(message):<{HEADER_LENGTH}}'.encode('utf-8')
-        client_socket.send(message_header + message)
+    for sock in read_sockets:
+        if sock == client_socket:
+            try:
+                # Receive things
+                username_header = client_socket.recv(HEADER_LENGTH)
+                if not len(username_header):
+                    print('\rconnection closed by the server')
+                    sys.exit()
 
-    try:
-        while True:
-            # Receive things
-            username_header = client_socket.recv(HEADER_LENGTH)
-            if not len(username_header):
-                print('connection closed by the server')
-                sys.exit()
+                # Get username
+                username_length = int(username_header.decode('utf-8').strip())
+                username = client_socket.recv(username_length).decode('utf-8')
+                # Get message
+                message_header = client_socket.recv(HEADER_LENGTH)
+                message_length = int(message_header.decode('utf-8').strip())
+                message = client_socket.recv(message_length).decode('utf-8')
 
-            # Get username
-            username_length = int(username_header.decode('utf-8').strip())
-            username = client_socket.recv(username_length).decode('utf-8')
-            # Get message
-            message_header = client_socket.recv(HEADER_LENGTH)
-            message_length = int(message_header.decode('utf-8').strip())
-            message = client_socket.recv(message_length).decode('utf-8')
+                print(f'\r[{username}]: {message}')
+                print(f'[Me]: ', end='')
+                sys.stdout.flush()
 
-            print(f'[{username}]: {message}')
+            except IOError as e:
+                if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
+                    print('reading error', str(e))
+                    sys.exit()
+                continue
+        else:
+            message = sys.stdin.readline()
+            print('[Me]: ', end='')
+            sys.stdout.flush()
 
-    except IOError as e:
-        if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
-            print('reading error', str(e))
-            sys.exit()
-        continue
-
-    # except Exception as e:
-    #     print('General error', str(e))
-    #     sys.exit()
+            # Check if message is not empty
+            if message:
+                # Send message
+                message = message.replace('\n', '')
+                message = message.encode('utf-8')
+                message_header = f'{len(message):<{HEADER_LENGTH}}'.encode(
+                    'utf-8')
+                client_socket.send(message_header + message)
