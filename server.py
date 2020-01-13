@@ -5,6 +5,7 @@ import socket
 import select
 import os
 import configparser
+from time import gmtime, strftime
 
 os.system('clear')
 print(r'''
@@ -95,6 +96,11 @@ def receive_message(client_socket):
         return False
 
 
+def log(msg):
+    time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+    print(f'[{time}]: {msg}')
+
+
 while True:
     read_sockets, _, exception_sockets = select.select(
         sockets_list, [], sockets_list)
@@ -116,7 +122,7 @@ while True:
             clients[client_socket] = user
 
             username = user['data'].decode('utf-8')
-            print(
+            log(
                 f'Accepted new connection from {client_address[0]}:{client_address[1]} username:{username}')
         # Someone sent a message/left
         else:
@@ -125,7 +131,7 @@ while True:
             # Connection closed
             if message is False:
                 username = clients[notified_socket]['data'].decode('utf-8')
-                print(f'Closed connection from {username}')
+                log(f'Closed connection from {username}')
                 # Remove disconnected socket from sockets_list
                 sockets_list.remove(notified_socket)
                 # Remove disconnected socket from clients (dict)
@@ -135,7 +141,7 @@ while True:
             user = clients[notified_socket]
             username = user['data'].decode('utf-8')
             msg = message['data'].decode('utf-8')
-            print(f'Received message from {username}: {msg}')
+            log(f'Received message from {username}: {msg}')
 
             # Share the message with everyone
             for client_socket in clients:
