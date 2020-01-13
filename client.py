@@ -34,7 +34,11 @@ PASSWORD = sys.argv[3]
 USERNAME = sys.argv[4]
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client_socket.connect((HOST_IP, PORT))
+try:
+    client_socket.connect((HOST_IP, PORT))
+except ConnectionRefusedError:
+    print('Connection refused (Check IP and Port)')
+    sys.exit()
 # Receive functionality will not be blocking
 client_socket.setblocking(False)
 
