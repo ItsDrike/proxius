@@ -1,5 +1,4 @@
 import socket
-import select
 import sys
 import errno
 import os
@@ -19,9 +18,15 @@ HEADER_LENGTH = int(config.get('Main', 'HEADER_LENGTH'))
 config.read(info_file)
 VERSION = config.get('Main', 'VERSION')
 
+os.system('clear')
+
 print('Proxius Client running | koumakpet')
 print('for more info, visit the github page: github.com/koumakpet/proxius')
-print(f'{VERSION}')
+print(f'{VERSION}\n')
+
+if len(sys.argv) != 5:
+    print('Usage: python client.py <Host IP> <PORT> <Password> <Username>')
+    sys.exit()
 
 HOST_IP = sys.argv[1]
 PORT = int(sys.argv[2])
