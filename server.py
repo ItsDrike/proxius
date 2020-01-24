@@ -70,6 +70,17 @@ def receive_message(client_socket):
         return False
 
 
+class Client:
+    def __init__(self, user, client_socket, client_address):
+        self.socket = client_socket
+        self.username_header = user['header']
+        self.raw_username = user['data']
+        self.username = self.raw_username.decode('utf-8')
+        self.ip = client_address[0]
+        self.port = client_address[1]
+        self.address = f'{self.ip}:{self.port}'
+
+
 # GET BASIC PARAMS FROM CONFIG
 config_file = 'config.conf'
 info_file = 'info.cfg'
@@ -95,7 +106,7 @@ server_socket.listen()
 
 
 sockets_list = [server_socket]  # List of known sockets
-clients = {}  # Key: client's socket, Value: user dataclients = {}
+clients = {}  # Contains Client class with client's information
 
 
 while True:
@@ -121,19 +132,20 @@ while True:
             sockets_list.append(client_socket)
 
             # Add client's info to clients dict
-            clients[client_socket] = user
+            clients[client_socket] = Client(
+                user, client_socket, client_address)
 
-            username = user['data'].decode('utf-8')
+            client = clients[client_socket]
             log(
-                f'Accepted new connection from {client_address[0]}:{client_address[1]} username:{username}')
+                f'Accepted new connection from {client.address} username:{client.username}')
         # Someone sent a message/left
         else:
             message = receive_message(notified_socket)
 
             # Connection closed
             if message is False:
-                username = clients[notified_socket]['data'].decode('utf-8')
-                log(f'Closed connection from {username}')
+                user = clients[notified_socket]
+                log(f'Closed connection from {user.username} ({user.address})')
                 # Remove disconnected socket from sockets_list
                 sockets_list.remove(notified_socket)
                 # Remove disconnected socket from clients (dict)
@@ -141,21 +153,20 @@ while True:
                 continue
 
             user = clients[notified_socket]
-            username = user['data'].decode('utf-8')
             msg = message['data'].decode('utf-8')
-            log(f'Received message from {username}: {msg}')
+            log(f'Received message from {user.username}: {msg}')
 
             # Share the message with everyone
             for client_socket in clients:
                 # Don't send back to sender
                 if client_socket != notified_socket:
                     # Send info about sender and the message he sent to other clients
-                    sender_information = user['header'] + user['data']
+                    sender_information = user.username_header + user.raw_username
                     message_to_send = message['header'] + message['data']
                     client_socket.send(sender_information + message_to_send)
 
     for notified_socket in exception_sockets:
-        username = clients[notified_socket]['data'].decode('utf-8')
-        log(f'Exception logged from {username}')
+        user = clients[notified_socket]
+        log(f'Exception logged from {user.username} ({user.address})')
         sockets_list.remove(notified_socket)
         del clients[notified_socket]
