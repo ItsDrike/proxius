@@ -6,50 +6,50 @@ import select
 import os
 import configparser
 from time import gmtime, strftime
-
-os.system('clear')
-print(r'''
-
-   ___                     _
-  / _ \  ____ ___  __ __  (_) __ __  ___
- / ___/ / __// _ \ \ \ / / / / // / (_-<
-/_/    /_/   \___//_\_\ /_/  \_,_/ /___/
-
-''')
+import sys
 
 
-# SETUP CONFIGPARSER
-DIR = os.path.dirname(os.path.realpath(__file__))
-config_file = os.path.join(DIR, 'config.conf')
-info_file = os.path.join(DIR, 'info.cfg')
-
-config = configparser.ConfigParser()
-config.read(config_file)
-
-# GET BASIC PARAMS FROM CONFIG
-HEADER_LENGTH = int(config.get('Main', 'HEADER_LENGTH'))
-IP = config.get('Main', 'IP')
-PORT = int(config.get('Main', 'PORT'))
-
-config.read(info_file)
-VERSION = config.get('Main', 'VERSION')
-
-print('Proxius Server running | Made by koumakpet')
-print('for more info, visit the github page: github.com/koumakpet/proxius')
-print(f'IP: {IP}:{PORT} | {VERSION}\n')
-
-# SETUP SERVER_SOCKET
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# Allow to reconnect (fix Address in use after restart)
-server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-server_socket.bind((IP, PORT))
-
-server_socket.listen()
+def get_config(config_file, category, value):
+    # SETUP CONFIGPARSER
+    DIR = os.path.dirname(os.path.realpath(__file__))
+    conf_file = os.path.join(DIR, config_file)
+    config = configparser.ConfigParser()
+    config.read(conf_file)
+    return config.get(category, value)
 
 
-sockets_list = [server_socket]  # List of known sockets
-clients = {}  # Key: client's socket, Value: user dataclients = {}
+def clear():
+    if sys.platform == "linux" or sys.platform == "linux2":
+        os.system('clear')
+    elif sys.platform == "darwin":
+        os.system('clear')
+    elif sys.platform == "win32":
+        os.system('cls')
+
+
+def init_msg(ip, port, version):
+    clear()
+    print(r'''
+
+       ___                     _
+      / _ \  ____ ___  __ __  (_) __ __  ___
+     / ___/ / __// _ \ \ \ / / / / // / (_-<
+    /_/    /_/   \___//_\_\ /_/  \_,_/ /___/
+
+    ''')
+
+    print('Proxius Server running | Made by koumakpet')
+    print('for more info, visit the github page: github.com/koumakpet/proxius')
+    print(f'IP: {ip}:{port} | {version}\n')
+
+
+def log(msg):
+    time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+    print(f'[{time}]: {msg}')
+
+
+def get_header(message):
+    return f'{len(message):<{HEADER_LENGTH}}'.encode('utf-8')
 
 
 def receive_message(client_socket):
@@ -66,18 +66,45 @@ def receive_message(client_socket):
 
         return {'header': message_header, 'data': client_socket.recv(message_length)}
     # Can happen if client breaks their script
-    except:
+    except Exception:
         return False
 
 
-def log(msg):
-    time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-    print(f'[{time}]: {msg}')
+# GET BASIC PARAMS FROM CONFIG
+config_file = 'config.conf'
+info_file = 'info.cfg'
+
+HEADER_LENGTH = int(get_config(config_file, 'Main', 'HEADER_LENGTH'))
+IP = get_config(config_file, 'Main', 'IP')
+PORT = int(get_config(config_file, 'Main', 'PORT'))
+
+VERSION = get_config(info_file, 'Main', 'VERSION')
+
+
+# Show starting message
+init_msg(IP, PORT, VERSION)
+
+# SETUP SERVER_SOCKET
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# Allow to reconnect (fix Address in use after restart)
+server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+# Set IP (and port)
+server_socket.bind((IP, PORT))
+
+server_socket.listen()
+
+
+sockets_list = [server_socket]  # List of known sockets
+clients = {}  # Key: client's socket, Value: user dataclients = {}
 
 
 while True:
-    read_sockets, _, exception_sockets = select.select(
-        sockets_list, [], sockets_list)
+    try:
+        read_sockets, write_sockets, exception_sockets = select.select(
+            sockets_list, [], sockets_list)
+    except KeyboardInterrupt:
+        print('\n\nServer stopped.. (KeyboardInterrupt)')
+        sys.exit()
 
     for notified_socket in read_sockets:
         # Someone just connected
@@ -87,7 +114,8 @@ while True:
             user = receive_message(client_socket)
             # Handle user disconnect
             if user is False:
-                continue
+                log(
+                    f'New connection failed from {client_address[0]}:{client_address[1]}')
 
             # Add user's socket to socket_list
             sockets_list.append(client_socket)
@@ -127,5 +155,7 @@ while True:
                     client_socket.send(sender_information + message_to_send)
 
     for notified_socket in exception_sockets:
+        username = clients[notified_socket]['data'].decode('utf-8')
+        log(f'Exception logged from {username}')
         sockets_list.remove(notified_socket)
         del clients[notified_socket]
