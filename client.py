@@ -4,6 +4,7 @@ import sys
 import errno
 import os
 import configparser
+import rsa
 
 
 def get_config(config_file, category, value):
@@ -71,7 +72,12 @@ def send_message(message, client_socket):
         message = message.replace('\n', '')
         message = message.encode('utf-8')
         message_header = get_header(message)
+
+        signature = rsa.sign(message, privkey, 'SHA-1')
+        signature_header = get_header(signature)
+
         client_socket.send(message_header + message)
+        client_socket.send(signature_header + signature)
 
 
 # GET BASIC PARAMS FROM CONFIG
@@ -80,6 +86,9 @@ info_file = 'info.cfg'
 
 HEADER_LENGTH = int(get_config(config_file, 'Main', 'HEADER_LENGTH'))
 VERSION = get_config(info_file, 'Main', 'VERSION')
+
+# GENERATE SHA KEYPAIR
+(pubkey, privkey) = rsa.newkeys(512)
 
 # Show starting message
 init_msg(VERSION)
@@ -112,7 +121,11 @@ client_socket.setblocking(False)
 # Send username to server
 uname = USERNAME.encode('utf-8')
 uname_header = get_header(uname)
+# public key for sharing in PEM format
+pubkey_pem = rsa.PublicKey.save_pkcs1(pubkey, format='PEM')
+pubkey_pem_header = get_header(pubkey_pem)
 client_socket.send(uname_header + uname)
+client_socket.send(pubkey_pem_header + pubkey_pem)
 
 
 def main():
